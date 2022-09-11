@@ -10,40 +10,52 @@ import SwiftUI
 
 
 struct ContentView: View {
-    @State private var wakeTime = Date.now
-    @State private var hoursOfSleep = 8.0
+    @State private var wakeTime = defaultWakeTime
+    @State private var hoursOfSleep = defaultHoursOfSleep
     @State private var cupsOfCoffee = 1
     
     @State private var alertTitle = ""
     @State private var alertMessage = ""
     @State private var isAlertPresented = false
     
+    var sleepTime : Date {
+        get {
+            calculatedBedTime()
+        }
+    }
+    
+    static var defaultHoursOfSleep = 8.0
+    static var defaultWakeTime: Date {
+        Calendar.current.date(from: DateComponents(hour: 7, minute: 0)) ?? Date.now
+    }
+    
     var body: some View {
         NavigationView {
-            VStack {
-                Text("Desired wakeup time")
-                    .padding()
-                DatePicker("Please enter a wake up time", selection: $wakeTime, displayedComponents: .hourAndMinute)
-                    .labelsHidden()
-                
-                Text("Desired amount of sleep")
-                    .padding()
-                Stepper("\(hoursOfSleep.formatted()) hours", value: $hoursOfSleep, in: 4...12, step: 0.25)
-                    .padding()
-                
-                
-                Text("Daily coffe intake")
-                    .padding()
-                Stepper("\(cupsOfCoffee) \(cupsOfCoffee == 1 ? "cup" : "cups")", value: $cupsOfCoffee, in: 1...20, step: 1)
-                    .padding()
-                
-                
-                
+            Form {
+                Section {
+                    HStack {
+                        Text("Desired wakeup time")
+                        Spacer()
+                        DatePicker("Please enter a wake up time", selection: $wakeTime, displayedComponents: .hourAndMinute)
+                            .labelsHidden()
+                    }
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Desired amount of sleep")
+                        Stepper("\(hoursOfSleep.formatted()) hours", value: $hoursOfSleep, in: 4...12, step: 0.25)
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("Daily coffe intake")
+                        Stepper("\(cupsOfCoffee) \(cupsOfCoffee == 1 ? "cup" : "cups")", value: $cupsOfCoffee, in: 1...20, step: 1)
+                    }
+                }
+                Section("Your ideal bedtime is...") {
+                    Text(sleepTime.formatted(date: .omitted, time: .shortened))
+                        .font(.title)
+                }
+        
             }
             .navigationTitle("Better Sleep")
-            .toolbar {
-                Button("Calculate sleep", action: calculatedBedTime)
-            }
             .alert(alertTitle, isPresented: $isAlertPresented) {
                 Button("OK") {   }
             } message: {
@@ -54,7 +66,7 @@ struct ContentView: View {
         
     }
     
-    func calculatedBedTime() {
+    func calculatedBedTime() -> Date {
         do {
             let config = MLModelConfiguration()
             let model = try SleepCalculator(configuration: config)
@@ -63,17 +75,15 @@ struct ContentView: View {
             let wakeTimeInSeconds = (components.hour ?? 0) * 60 * 60 + (components.minute ?? 0) * 60
             
             let prediction = try model.prediction(wake: Double(wakeTimeInSeconds), estimatedSleep: hoursOfSleep, coffee: Double(cupsOfCoffee))
-            
-            let sleepTime = wakeTime - prediction.actualSleep
-            
-            alertTitle = "Your ideal bedtime is..."
-            alertMessage = sleepTime.formatted(date: .omitted, time: .shortened)
+            return wakeTime - prediction.actualSleep
         }
         catch {
             alertTitle = "There was an error."
             alertMessage = "Sorry, there was a problem calculating your bedtime"
+            isAlertPresented = true
         }
-        isAlertPresented = true
+
+        return ContentView.defaultWakeTime - ContentView.defaultHoursOfSleep * 60 * 60
     }
 }
 
